@@ -200,11 +200,12 @@ mv /store/nginx.conf /data/nginx/nginx.conf
 
 # Set the correct port and possibly remove SSL configs
 if [ $SSL ]; then
-	sed -i 's/listen PORT;/listen 443;/g' /data/nginx/nginx.conf
+	NGINX_PORT=443
 else
-	sed -i 's/listen PORT;/listen 80;/g' /data/nginx/nginx.conf
+	NGINX_PORT=80
 	sed -i '/^  ssl/d' /data/nginx/nginx.conf
 fi
+sed -i "s/listen PORT;/listen $NGINX_PORT;/g" /data/nginx/nginx.conf
 
 # Set the correct domain name
 if [ -z $DOMAIN ]; then
@@ -219,7 +220,7 @@ sed -i "s/REGISTRY-IP:5000/$REGISTRY_IP:5000/g" /data/nginx/nginx.conf
 # Start the nginx proxy
 docker stop registry-nginx
 docker rm registry-nginx
-docker run -d --name registry-nginx -p 5000:443  \
+docker run -d --name registry-nginx -p 5000:$NGINX_PORT  \
            -v $INSTALLDIR/certificates:/etc/nginx/certs \
            -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
            -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/nginx.conf \

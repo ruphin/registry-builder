@@ -1,5 +1,5 @@
-A quick private docker registry installer
-=========================================
+A complete private docker registry installer
+============================================
 
 Need a private docker registry? This will effortlessly set up a private registry anywhere, with redis caching for extra speed, authentication, and optional SSL out of the box. It works interactively from the commandline, but offers full automation options for making the whole process repeatable.
 
