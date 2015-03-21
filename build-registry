@@ -204,7 +204,7 @@ mkdir -p /data/nginx
 mv /store/nginx.conf /data/nginx/nginx.conf
 
 # Set the correct port and possibly remove SSL configs
-if [ $SSL ]; then
+if [ "$SSL" = true ]; then
 	NGINX_PORT=443
 else
 	NGINX_PORT=80
