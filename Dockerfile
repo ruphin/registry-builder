@@ -9,6 +9,9 @@ RUN curl -sSL -O https://get.docker.com/builds/Linux/x86_64/docker-1.5.0 \
 
 ADD ./build-registry /usr/local/bin/build-registry
 
+ADD ./config.yml /store/config.yml
+ADD ./nginx.conf /store/nginx.conf
+
 VOLUME ['/data', '/etc/nginx/certs', '/etc/nginx/htpasswd']
 
 ENTRYPOINT ["build-registry"]

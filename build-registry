@@ -154,7 +154,7 @@ if [ $INTERACTIVE ]; then
 			exit 1
 		fi
 		mkdir -p /data/auth
-		echo $HTTP_AUTH_USERNAME | docker run --rm -i ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
+		echo $HTTP_AUTH_USERNAME | docker run --rm ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
 		echo ''
 		echo 'Storing the credentials in an htpasswd file:'
 		echo "$INSTALLDIR/auth/registry.htpasswd"
@@ -191,16 +191,30 @@ docker run -d --name=registry \
            --link registry-redis:redis \
            registry
 
+# Save the IP address of the registry
+REGISTRY_IP=`docker inspect --format '{{ .NetworkSettings.IPAddress }}' registry`
+
 # Add config file for nginx
 mkdir -p /data/nginx
+mv /store/nginx.conf /data/nginx/nginx.conf
+
+# Set the correct port and possibly remove SSL configs
 if [ $SSL ]; then
-	mv /store/nginx-ssl.conf /data/nginx/nginx.conf
+	sed -i 's/listen PORT;/listen 443;/g' /data/nginx/nginx.conf
 else
-	mv /store/nginx-no-ssl.conf /data/nginx/nginx.conf
+	sed -i 's/listen PORT;/listen 80;/g' /data/nginx/nginx.conf
+	sed -i '/^  ssl/d' /data/nginx/nginx.conf
 fi
 
-# TODO:
-# Inject the correct IP Address for the registry into nginx config
+# Set the correct domain name
+if [ -z $DOMAIN ]; then
+	sed -i "s/server_name DOMAIN/server_name $DOMAIN/g" /data/nginx/nginx.conf
+else
+	sed -i '/server_name DOMAIN/d' /data/nginx/nginx.conf
+fi
+
+# Set the correct upstream to the registry container
+sed -i "s/REGISTRY-IP:5000/$REGISTRY_IP:5000/g" /data/nginx/nginx.conf
 
 # Start the nginx proxy
 docker stop registry-nginx
