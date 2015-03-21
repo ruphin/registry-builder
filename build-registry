@@ -191,6 +191,7 @@ set -e
 docker run -d --name=registry \
            -v $DIRNAME/registry/data:/data \
            -v $DIRNAME/registry/config.yml:/docker-registry/config/config.yml \
+           -e DOCKER_REGISTRY_CONFIG=/docker-registry/config/config.yml \
            -e SETTINGS_FLAVOR=production \
            --link registry-redis:redis \
            registry
@@ -229,5 +230,5 @@ set -e
 docker run -d --name registry-nginx -p 5000:$NGINX_PORT  \
            -v $INSTALLDIR/certificates:/etc/nginx/certs \
            -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
-           -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/nginx.conf \
+           -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/conf.d/default.conf \
            nginx
