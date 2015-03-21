@@ -1,0 +1,212 @@
+#!/bin/bash
+
+set -e
+
+# Check if the script is run interactively
+if [ -t 1 ]; then
+	INTERACTIVE=true
+fi
+
+# Check if a domain name is provided
+if [ ! $INTERACTIVE ] && [ -z $DOMAIN ]; then
+	echo 'You must provide a domain name, or run interactively'
+	echo 'Either pass `-it` or `-e DOMAIN=<domain>` to the docker run command'
+	echo 'See https://github.com/ruphin/registry-builder for details'
+fi
+
+# Check if the docker socket is mounted
+if [ ! -S '/var/run/docker.sock' ]; then
+	echo 'You must bind the docker daemon socket when running this container'
+	echo ''
+	echo 'For example, to install in the current working directory:'
+	echo 'docker run -v /var/run/docker.sock:/var/run/docker.sock \'
+	echo '           -e INSTALLDIR=$PWD -v $PWD:/data -ti ruphin/registry-builder'
+	echo ''
+	exit 1
+fi
+
+# Check if an installation directory is provided
+if [ -z $INSTALLDIR ] || [ ! -d /data ]; then
+	echo 'You must provide an installation directory when running this container'
+	echo ''
+	echo 'For example, to install in the current working directory:'
+	echo 'docker run -v /var/run/docker.sock:/var/run/docker.sock \'
+	echo '           -e INSTALLDIR=$PWD -v $PWD:/data -ti ruphin/registry-builder'
+	echo ''
+	exit 1
+fi
+
+if [ -z $DOMAIN ]; then
+	read -p 'Enter the domain name for this registry (e.g. hub.company.com): ' DOMAIN
+	if [ -z $DOMAIN ] || [[ "$DOMAIN" =~ [^a-zA-Z0-9\.] ]]; then
+		DOMAIN=''
+		echo 'Invalid domain name'
+		echo ''
+		read -p 'Enter the IP address of this machine (e.g. 123.123.123.123): ' IP_ADDRESS
+		if [ -z $IP_ADDRESS ] || [[ "$IP_ADDRESS" =~ [^0-9\.] ]]; then
+			IP_ADDRESS=''
+			echo 'Invalid IP address'
+			echo ''
+			echo 'You must provide a domain name or IP Address for SSL'
+			echo ''
+			read -p 'Continue without SSL? [y/N] ' CONTINUE
+			if [[ "$CONTINUE" =~ ^[^Yy] ]]; then
+				echo -e "Exiting.\n"
+				exit 1
+			fi
+			echo ''
+			echo 'Continuing with SSL DISABLED...'
+			SKIP_SSL=true
+			SSL=false
+		fi
+	fi
+fi
+
+if [ ! $SKIP_SSL ]; then
+	echo ''
+	if [ -f /data/certificates/registry.key.gpg ] && [ -f /data/certificates/registry.crt.gpg ]; then
+		echo 'Found encrypted SSL Certificates.'
+		read -s -p "Enter a passphrase to decrypt: " SSL_ENCRYPTION_PASSPHRASE
+		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/registry.key.gpg \
+		     > /data/certificates/registry.key
+		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/registry.crt.gpg \
+		     > /data/certificates/registry.crt
+		rm /data/certificates/registry.key.gpg
+		rm /data/certificates/registry.crt.gpg
+		echo 'Succesfully decrypted your certificates. Continuing with SSL enabled...'
+		SSL=true
+	elif [ -f /data/certificates/registry.key ] && [ -f /data/certificates/registry.crt ]; then
+		echo 'Found SSL Certificates. Continuing with SSL enabled...'
+		SSL=true
+	elif [ ! -z $DOMAIN ] || [ ! -z $IP_ADDRESS ]; then
+		echo "No SSL certificates found in $INSTALLDIR/certificates/"
+		echo 'Read https://github.com/ruphin/registry-builder for instructions to deploy'
+		echo 'with your own SSL certificates'
+		echo ''
+		read -p 'Generate self-signed certificates instead? [y/N] ' SELFSIGNED
+		if [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
+			echo ''
+			if [ ! -z $DOMAIN ]; then
+				COMMON_NAME=$DOMAIN
+			else
+				COMMON_NAME=$IP_ADDRESS
+			fi
+			set +e
+			docker run --rm -e COMMON_NAME=$COMMON_NAME -e KEY_NAME=registry -v $INSTALLDIR/certificates:/certs centurylink/openssl 2> /tmp/openssl_out
+			if [ $? -ne 0 ]; then
+				cat /tmp/openssl_out
+				echo ''
+				echo 'Certificate generation failed'
+				echo -e "Exiting.\n"
+			fi
+			set -e
+			echo "Self-signed certificates generated for $COMMON_NAME"
+			echo "You will find them in $INSTALLDIR/certificates"
+			echo ''
+			echo 'Continuing with SSL enabled...'
+			SSL=true
+		else
+			read -p 'Continue without SSL? [y/N] ' CONTINUE
+			if [[ "$CONTINUE" =~ ^[^Yy] ]]; then
+				echo -e "Exiting.\n"
+				exit 1
+			fi
+			echo ''
+			echo 'Continuing with SSL DISABLED...'
+			SSL=false
+		fi
+	fi
+fi
+
+echo ''
+echo 'Setting up authentication...'
+if [ $INTERACTIVE ]; then
+	if [ -f /data/auth/registry.htpasswd ]; then
+		echo "Found $INSTALLDIR/auth/registry.htpasswd"
+		read -p 'Use this for authorization? [Y/n] ' USE_EXISTING_HTPASSWD
+		if [[ "$USE_EXISTING_HTPASSWD" =~ ^[Nn] ]]; then
+			rm /data/auth/registry.htpasswd
+		fi
+	else
+		echo 'No $INSTALLDIR/auth/registry.htpasswd file found'
+	fi
+	if [ ! -f /data/auth/registry.htpasswd ]; then
+		echo 'Generating an htpasswd file interactively'
+		echo ''
+		read -p 'Enter a username: ' HTTP_AUTH_USERNAME
+		if [ -z $HTTP_AUTH_USERNAME ] || [[ "$HTTP_AUTH_USERNAME" =~ [^a-zA-Z0-9] ]]; then
+			echo 'Username cannot be empty'
+			echo -e "Exiting.\n"
+			exit 1
+		fi
+		read -s -p 'Enter a password: ' HTTP_AUTH_PASSWORD
+		echo ''
+		if [ -z $HTTP_AUTH_PASSWORD ]; then
+			echo 'Password cannot be empty'
+			echo -e "Exiting.\n"
+			exit 1
+		fi
+		read -s -p 'Repeat the password: ' HTTP_AUTH_PASSWORD_REPEAT
+		echo ''
+		if [ $HTTP_AUTH_PASSWORD != $HTTP_AUTH_PASSWORD_REPEAT ]; then
+			echo 'The entered passwords do not match.'
+			echo -e "Exiting.\n"
+			exit 1
+		fi
+		mkdir -p /data/auth
+		echo $HTTP_AUTH_USERNAME | docker run --rm -i ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
+		echo ''
+		echo 'Storing the credentials in an htpasswd file:'
+		echo "$INSTALLDIR/auth/registry.htpasswd"
+	fi
+else # Not running interactively
+	if [ ! -f /data/auth/registry.htpasswd ]; then
+		echo 'You must provide an authentication file here:'
+		echo "$INSTALLDIR/auth/registry.htpasswd"
+		echo 'Or run this program interactively by passing `-it` to the docker run command'
+		exit 1
+	fi
+fi
+
+echo ''
+echo 'Starting the registry'
+
+# Start redis
+docker stop registry-redis
+docker rm registry-redis
+docker run -d --name registry-redis \
+           redis
+
+# Add config file for the registry
+mkdir -p /data/registry/config.yml
+mv /store/config.yml /data/registry/config.yml
+
+# Start the registry
+docker stop registry
+docker rm registry
+docker run -d --name=registry \
+           -v $DIRNAME/registry/data:/data \
+           -v $DIRNAME/registry/config.yml:/docker-registry/config/config.yml \
+           -e SETTINGS_FLAVOR production \
+           --link registry-redis:redis \
+           registry
+
+# Add config file for nginx
+mkdir -p /data/nginx
+if [ $SSL ]; then
+	mv /store/nginx-ssl.conf /data/nginx/nginx.conf
+else
+	mv /store/nginx-no-ssl.conf /data/nginx/nginx.conf
+fi
+
+# TODO:
+# Inject the correct IP Address for the registry into nginx config
+
+# Start the nginx proxy
+docker stop registry-nginx
+docker rm registry-nginx
+docker run -d --name registry-nginx -p 5000:443  \
+           -v $INSTALLDIR/certificates:/etc/nginx/certs \
+           -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
+           -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/nginx.conf \
+           nginx
