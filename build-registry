@@ -172,8 +172,10 @@ echo ''
 echo 'Starting the registry'
 
 # Start redis
+set +e
 docker stop registry-redis
 docker rm registry-redis
+set -e
 docker run -d --name registry-redis \
            redis
 
@@ -182,8 +184,10 @@ mkdir -p /data/registry/config.yml
 mv /store/config.yml /data/registry/config.yml
 
 # Start the registry
+set +e
 docker stop registry
 docker rm registry
+set -e
 docker run -d --name=registry \
            -v $DIRNAME/registry/data:/data \
            -v $DIRNAME/registry/config.yml:/docker-registry/config/config.yml \
@@ -218,8 +222,10 @@ fi
 sed -i "s/REGISTRY-IP:5000/$REGISTRY_IP:5000/g" /data/nginx/nginx.conf
 
 # Start the nginx proxy
+set +e
 docker stop registry-nginx
 docker rm registry-nginx
+set -e
 docker run -d --name registry-nginx -p 5000:$NGINX_PORT  \
            -v $INSTALLDIR/certificates:/etc/nginx/certs \
            -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
