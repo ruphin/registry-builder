@@ -50,7 +50,7 @@ if [ -z $DOMAIN ]; then
 			echo 'You must provide a domain name or IP Address for SSL'
 			echo ''
 			read -p 'Continue without SSL? [y/N] ' CONTINUE
-			if [[ "$CONTINUE" =~ ^[^Yy] ]]; then
+			if [ -z $CONTINUE ] || [[ "$CONTINUE" =~ ^[^Yy] ]]; then
 				echo -e "Exiting.\n"
 				exit 1
 			fi
@@ -84,7 +84,7 @@ if [ ! $SKIP_SSL ]; then
 		echo 'with your own SSL certificates'
 		echo ''
 		read -p 'Generate self-signed certificates instead? [y/N] ' SELFSIGNED
-		if [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
+		if [ -z $SELFSIGNED ] ||  [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
 			echo ''
 			if [ ! -z $DOMAIN ]; then
 				COMMON_NAME=$DOMAIN
@@ -189,8 +189,8 @@ docker stop registry 2> /dev/null
 docker rm registry 2> /dev/null
 set -e
 docker run -d --name=registry \
-           -v $DIRNAME/registry/data:/data \
-           -v $DIRNAME/registry/config.yml:/docker-registry/config/config.yml \
+           -v $INSTALLDIR/registry/data:/data \
+           -v $INSTALLDIR/registry/config.yml:/docker-registry/config/config.yml \
            -e DOCKER_REGISTRY_CONFIG=/docker-registry/config/config.yml \
            -e SETTINGS_FLAVOR=production \
            --link registry-redis:redis \
