@@ -84,7 +84,7 @@ if [ ! $SKIP_SSL ]; then
 		echo 'with your own SSL certificates'
 		echo ''
 		read -p 'Generate self-signed certificates instead? [y/N] ' SELFSIGNED
-		if [ -z $SELFSIGNED ] ||  [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
+		if [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
 			echo ''
 			if [ ! -z $DOMAIN ]; then
 				COMMON_NAME=$DOMAIN
