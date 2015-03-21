@@ -62,7 +62,7 @@ if [ -z $DOMAIN ]; then
 	fi
 fi
 
-if [ ! $SKIP_SSL ]; then
+if [ "$SKIP_SSL" != true ]; then
 	echo ''
 	if [ -f /data/certificates/registry.key.gpg ] && [ -f /data/certificates/registry.crt.gpg ]; then
 		echo 'Found encrypted SSL Certificates.'
