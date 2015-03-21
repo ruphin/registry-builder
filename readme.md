@@ -11,7 +11,7 @@ Run this anywhere:
 ```bash
 docker run -v /var/run/docker.sock:/var/run/docker.sock \
            -e INSTALLDIR=$PWD -v $PWD:/data \
-           --rm -it ruphin/registry-builder
+           --rm -it ruphin/registry-installer
 ```
 
 And you have your own private registry:
@@ -25,7 +25,7 @@ docker push anywhere:5000/mydebian
 docker pull anywhere:5000/mydebian
 ```
 
-## What is this
+## What is this?
 
 This is a simple installer for private docker registries, inside a public docker image. The intention of this installer is that it can be run anywhere without requiring any setup or downloads, it only needs docker to be installed. It will configure and start a [docker registry](https://registry.hub.docker.com/_/registry/), with a [redis cache](https://registry.hub.docker.com/_/redis/), and an [nginx proxy](https://registry.hub.docker.com/u/library/nginx/). The resulting installation uses only official images, and includes authentication, caching, and optionally SSL connectivity.
 
@@ -51,7 +51,7 @@ This is the standard installation method. It will interactively ask you everythi
 ```bash
 docker run -v /var/run/docker.sock:/var/run/docker.sock \
            -e INSTALLDIR=$PWD -v $PWD:/data \
-           --rm -it ruphin/registry-builder
+           --rm -it ruphin/registry-installer
 ```
 
 #### Automated install
@@ -69,7 +69,7 @@ With these in place, you can run the following:
 docker run -v /var/run/docker.sock:/var/run/docker.sock \
            -e INSTALLDIR=<installpath> -v <installpath>:/data \
            -e DOMAIN=<domainname> \
-           --rm ruphin/registry-builder
+           --rm ruphin/registry-installer
 ```
 
 
