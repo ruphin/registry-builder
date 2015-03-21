@@ -41,11 +41,12 @@ It is possible to provide your own SSL certificates. If you do not have any, sel
 
 ## Usage
 
-There are two ways to install your private registry. In the interactive install, you will be asked for any necessary configuration through the command line. This mode is recommended for normal use.
-In the automated install, you have to provide the necessary configurations and files beforehand, and the installer will attempt to complete the installation automatically. If anything is missing it will not ask for additional information, and immediately exit with a failure. This mode is recommended for automated installations.
+There are two ways to install your private registry. In the interactive install, you will be asked for any necessary configuration through the command line. This mode is recommended for normal use. In the automated install, you have to provide the necessary configurations and files beforehand, and the installer will attempt to complete the installation automatically. If anything is missing it will not ask for additional information, and immediately exit with a failure. This mode is recommended for automated installations.
 
 
 #### Interactive install
+
+This is the standard installation method. It will interactively ask you everything it needs to complete the installation process. Simply `cd` into the desired installation directory and run this:
 
 ```bash
 docker run -v /var/run/docker.sock:/var/run/docker.sock \
@@ -72,7 +73,7 @@ docker run -v /var/run/docker.sock:/var/run/docker.sock \
 ```
 
 
-#### Encryption
+## Encryption
 
 If you don't like moving your SSL keys unencrypted (which is understandable) the installer supports GPG encryption. If you provide `<installpath>/certificates/registry.crt.gpg` and `<installpath>/certificates/registry.key.gpg` and use the interactive install, you will be asked for a passphrase to decrypt these files.
 
