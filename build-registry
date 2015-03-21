@@ -191,7 +191,7 @@ set -e
 docker run -d --name=registry \
            -v $DIRNAME/registry/data:/data \
            -v $DIRNAME/registry/config.yml:/docker-registry/config/config.yml \
-           -e SETTINGS_FLAVOR production \
+           -e SETTINGS_FLAVOR=production \
            --link registry-redis:redis \
            registry
 
