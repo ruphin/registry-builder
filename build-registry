@@ -180,8 +180,8 @@ docker run -d --name registry-redis \
            redis
 
 # Add config file for the registry
-mkdir -p /data/registry/config.yml
-mv /store/config.yml /data/registry/
+mkdir -p /data/registry
+mv /store/config.yml /data/registry/config.yml
 
 # Start the registry
 set +e

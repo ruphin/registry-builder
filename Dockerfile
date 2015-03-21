@@ -12,6 +12,6 @@ ADD ./build-registry /usr/local/bin/build-registry
 ADD ./config.yml /store/config.yml
 ADD ./nginx.conf /store/nginx.conf
 
-VOLUME ['/data', '/etc/nginx/certs', '/etc/nginx/htpasswd']
+VOLUME ['/data']
 
 ENTRYPOINT ["build-registry"]
