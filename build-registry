@@ -40,70 +40,71 @@ if [ -z $DOMAIN ]; then
 	read -p 'Enter the domain name for this registry (e.g. hub.company.com): ' DOMAIN
 	if [ -z $DOMAIN ] || [[ "$DOMAIN" =~ [^a-zA-Z0-9\.] ]]; then
 		DOMAIN=''
-		echo 'Invalid domain name'
+		echo ' > Invalid domain name'
 		echo ''
 		read -p 'Enter the IP address of this machine (e.g. 123.123.123.123): ' IP_ADDRESS
 		if [ -z $IP_ADDRESS ] || [[ "$IP_ADDRESS" =~ [^0-9\.] ]]; then
 			IP_ADDRESS=''
-			echo 'Invalid IP address'
+			echo ' > Invalid IP address'
 			echo ''
-			echo 'You must provide a domain name or IP Address for SSL'
+			echo ' > You must provide a domain name or IP Address for SSL'
 			echo ''
-			read -p 'Continue without SSL? [y/N] ' CONTINUE
+			read -p 'Continue without SSL? (not advisable) [y/N] ' CONTINUE
 			if [ -z $CONTINUE ] || [[ "$CONTINUE" =~ ^[^Yy] ]]; then
 				echo -e "Exiting.\n"
 				exit 1
 			fi
 			echo ''
-			echo 'Continuing with SSL DISABLED...'
+			echo ' > Continuing with SSL DISABLED...'
 			SKIP_SSL=true
 			SSL=false
 		fi
 	fi
 fi
 
+if [ ! -z $DOMAIN ]; then
+	COMMON_NAME=$DOMAIN
+else
+	COMMON_NAME=$IP_ADDRESS
+fi
+
 if [ "$SKIP_SSL" != true ]; then
 	echo ''
-	if [ -f /data/certificates/registry.key.gpg ] && [ -f /data/certificates/registry.crt.gpg ]; then
-		echo 'Found encrypted SSL Certificates.'
+	if [ -f /data/certificates/$COMMON_NAME.key.gpg ] && [ -f /data/certificates/$COMMON_NAME.crt.gpg ]; then
+		echo ' > Found encrypted SSL Certificates.'
 		read -s -p "Enter a passphrase to decrypt: " SSL_ENCRYPTION_PASSPHRASE
-		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/registry.key.gpg \
-		     > /data/certificates/registry.key
-		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/registry.crt.gpg \
-		     > /data/certificates/registry.crt
-		rm /data/certificates/registry.key.gpg
-		rm /data/certificates/registry.crt.gpg
-		echo 'Succesfully decrypted your certificates. Continuing with SSL enabled...'
+		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/$COMMON_NAME.key.gpg \
+		     > /data/certificates/$COMMON_NAME.key
+		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/$COMMON_NAME.crt.gpg \
+		     > /data/certificates/$COMMON_NAME.crt
+		rm /data/certificates/$COMMON_NAME.key.gpg
+		rm /data/certificates/$COMMON_NAME.crt.gpg
+		echo ' > Succesfully decrypted your certificates. Continuing with SSL enabled...'
 		SSL=true
-	elif [ -f /data/certificates/registry.key ] && [ -f /data/certificates/registry.crt ]; then
-		echo 'Found SSL Certificates. Continuing with SSL enabled...'
+	elif [ -f /data/certificates/$COMMON_NAME.key ] && [ -f /data/certificates/$COMMON_NAME.crt ]; then
+		echo ' > Found SSL Certificates. Continuing with SSL enabled...'
 		SSL=true
-	elif [ ! -z $DOMAIN ] || [ ! -z $IP_ADDRESS ]; then
-		echo "No SSL certificates found in $INSTALLDIR/certificates/"
-		echo 'Read https://github.com/ruphin/registry-builder for instructions to deploy'
-		echo 'with your own SSL certificates'
+	else
+		echo " > No SSL certificates found in $INSTALLDIR/certificates/"
+		echo ' > Read https://github.com/ruphin/registry-builder for instructions to deploy'
+		echo ' > with your own SSL certificates'
 		echo ''
 		read -p 'Generate self-signed certificates instead? [y/N] ' SELFSIGNED
 		if [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
 			echo ''
-			if [ ! -z $DOMAIN ]; then
-				COMMON_NAME=$DOMAIN
-			else
-				COMMON_NAME=$IP_ADDRESS
-			fi
 			set +e
 			docker run --rm -e COMMON_NAME=$COMMON_NAME -e KEY_NAME=registry -v $INSTALLDIR/certificates:/certs centurylink/openssl 2> /tmp/openssl_out
 			if [ $? -ne 0 ]; then
 				cat /tmp/openssl_out
 				echo ''
-				echo 'Certificate generation failed'
+				echo ' > Certificate generation failed'
 				echo -e "Exiting.\n"
 			fi
 			set -e
-			echo "Self-signed certificates generated for $COMMON_NAME"
-			echo "You will find them in $INSTALLDIR/certificates"
+			echo " > Self-signed certificates generated for $COMMON_NAME"
+			echo " > You will find them in $INSTALLDIR/certificates/"
 			echo ''
-			echo 'Continuing with SSL enabled...'
+			echo ' > Continuing with SSL enabled...'
 			SSL=true
 		else
 			read -p 'Continue without SSL? [y/N] ' CONTINUE
@@ -112,26 +113,26 @@ if [ "$SKIP_SSL" != true ]; then
 				exit 1
 			fi
 			echo ''
-			echo 'Continuing with SSL DISABLED...'
+			echo ' > Continuing with SSL DISABLED...'
 			SSL=false
 		fi
 	fi
 fi
 
 echo ''
-echo 'Setting up authentication...'
+echo ' > Setting up authentication...'
 if [ $INTERACTIVE ]; then
 	if [ -f /data/auth/registry.htpasswd ]; then
-		echo "Found $INSTALLDIR/auth/registry.htpasswd"
+		echo " > Found $INSTALLDIR/auth/registry.htpasswd"
 		read -p 'Use this for authorization? [Y/n] ' USE_EXISTING_HTPASSWD
 		if [[ "$USE_EXISTING_HTPASSWD" =~ ^[Nn] ]]; then
 			rm /data/auth/registry.htpasswd
 		fi
 	else
-		echo 'No $INSTALLDIR/auth/registry.htpasswd file found'
+		echo ' > No $INSTALLDIR/auth/registry.htpasswd file found'
 	fi
 	if [ ! -f /data/auth/registry.htpasswd ]; then
-		echo 'Generating an htpasswd file interactively'
+		echo ' > Generating an htpasswd file interactively'
 		echo ''
 		read -p 'Enter a username: ' HTTP_AUTH_USERNAME
 		if [ -z $HTTP_AUTH_USERNAME ] || [[ "$HTTP_AUTH_USERNAME" =~ [^a-zA-Z0-9] ]]; then
@@ -156,8 +157,8 @@ if [ $INTERACTIVE ]; then
 		mkdir -p /data/auth
 		echo $HTTP_AUTH_USERNAME | docker run --rm -i ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
 		echo ''
-		echo 'Storing the credentials in an htpasswd file:'
-		echo "$INSTALLDIR/auth/registry.htpasswd"
+		echo ' > Storing the credentials in an htpasswd file:'
+		echo " > $INSTALLDIR/auth/registry.htpasswd"
 	fi
 else # Not running interactively
 	if [ ! -f /data/auth/registry.htpasswd ]; then
@@ -169,7 +170,8 @@ else # Not running interactively
 fi
 
 echo ''
-echo 'Starting the registry'
+echo ' > Starting the registry'
+echo ''
 
 # Start redis
 set +e
@@ -206,6 +208,7 @@ mv /store/nginx.conf /data/nginx/nginx.conf
 # Set the correct port and possibly remove SSL configs
 if [ "$SSL" = true ]; then
 	NGINX_PORT=443
+	sed -i "s/\/FQDN\./\/$COMMON_NAME./g" /data/nginx/nginx.conf
 else
 	NGINX_PORT=80
 	sed -i '/^  ssl/d' /data/nginx/nginx.conf
@@ -232,3 +235,14 @@ docker run -d --name registry-nginx -p 5000:$NGINX_PORT  \
            -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
            -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/conf.d/default.conf \
            nginx
+
+echo ''
+echo ' > Done'
+echo ' > If your SSL certificates are set up,'
+echo ' > You can now do cool stuff:'
+echo ''
+echo 'docker pull debian'
+echo 'docker login -u <username> -p <password> -e what@ever.com https://$COMMON_NAME:5000'
+echo 'docker tag debian $COMMON_NAME:5000/mydebian'
+echo 'docker push $COMMON_NAME:5000/mydebian'
+echo 'docker pull $COMMON_NAME:5000/mydebian'
