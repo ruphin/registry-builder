@@ -154,7 +154,7 @@ if [ $INTERACTIVE ]; then
 			exit 1
 		fi
 		mkdir -p /data/auth
-		echo $HTTP_AUTH_USERNAME | docker run --rm ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
+		echo $HTTP_AUTH_USERNAME | docker run --rm -i ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
 		echo ''
 		echo 'Storing the credentials in an htpasswd file:'
 		echo "$INSTALLDIR/auth/registry.htpasswd"
