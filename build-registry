@@ -39,83 +39,59 @@ fi
 if [ -z $DOMAIN ]; then
 	read -p 'Enter the domain name for this registry (e.g. hub.company.com): ' DOMAIN
 	if [ -z $DOMAIN ] || [[ "$DOMAIN" =~ [^a-zA-Z0-9\.] ]]; then
-		DOMAIN=''
 		echo ' > Invalid domain name'
+		echo ' > A domain name is required for SSL'
 		echo ''
-		read -p 'Enter the IP address of this machine (e.g. 123.123.123.123): ' IP_ADDRESS
-		if [ -z $IP_ADDRESS ] || [[ "$IP_ADDRESS" =~ [^0-9\.] ]]; then
-			IP_ADDRESS=''
-			echo ' > Invalid IP address'
-			echo ''
-			echo ' > You must provide a domain name or IP Address for SSL'
-			echo ''
-			read -p 'Continue without SSL? (not advisable) [y/N] ' CONTINUE
-			if [ -z $CONTINUE ] || [[ "$CONTINUE" =~ ^[^Yy] ]]; then
-				echo -e "Exiting.\n"
-				exit 1
-			fi
-			echo ''
-			echo ' > Continuing with SSL DISABLED...'
-			SKIP_SSL=true
-			SSL=false
-		fi
+		echo -e "Exiting.\n"
+		exit 1
 	fi
 fi
 
-if [ ! -z $DOMAIN ]; then
-	COMMON_NAME=$DOMAIN
-else
-	COMMON_NAME=$IP_ADDRESS
-fi
+COMMON_NAME=$DOMAIN
 
-if [ "$SKIP_SSL" != true ]; then
+echo ''
+if [ -f /data/certificates/$COMMON_NAME.key.gpg ] && [ -f /data/certificates/$COMMON_NAME.crt.gpg ]; then
+	echo ' > Found encrypted SSL Certificates.'
+	read -s -p "Enter a passphrase to decrypt: " SSL_ENCRYPTION_PASSPHRASE
+	echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/$COMMON_NAME.key.gpg \
+	     > /data/certificates/$COMMON_NAME.key
+	echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/$COMMON_NAME.crt.gpg \
+	     > /data/certificates/$COMMON_NAME.crt
+	rm /data/certificates/$COMMON_NAME.key.gpg
+	rm /data/certificates/$COMMON_NAME.crt.gpg
+	echo ' > Succesfully decrypted your certificates. Continuing with SSL enabled...'
+elif [ -f /data/certificates/$COMMON_NAME.key ] && [ -f /data/certificates/$COMMON_NAME.crt ]; then
+	echo ' > Found SSL Certificates. Continuing with SSL enabled...'
+else
+	echo " > No SSL certificates found in $INSTALLDIR/certificates/"
+	echo ' > Read https://github.com/ruphin/registry-builder for instructions to deploy'
+	echo ' > with your own SSL certificates'
 	echo ''
-	if [ -f /data/certificates/$COMMON_NAME.key.gpg ] && [ -f /data/certificates/$COMMON_NAME.crt.gpg ]; then
-		echo ' > Found encrypted SSL Certificates.'
-		read -s -p "Enter a passphrase to decrypt: " SSL_ENCRYPTION_PASSPHRASE
-		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/$COMMON_NAME.key.gpg \
-		     > /data/certificates/$COMMON_NAME.key
-		echo $SSL_ENCRYPTION_PASSPHRASE | gpg --decrypt --passphrase-fd 0 /data/certificates/$COMMON_NAME.crt.gpg \
-		     > /data/certificates/$COMMON_NAME.crt
-		rm /data/certificates/$COMMON_NAME.key.gpg
-		rm /data/certificates/$COMMON_NAME.crt.gpg
-		echo ' > Succesfully decrypted your certificates. Continuing with SSL enabled...'
-		SSL=true
-	elif [ -f /data/certificates/$COMMON_NAME.key ] && [ -f /data/certificates/$COMMON_NAME.crt ]; then
-		echo ' > Found SSL Certificates. Continuing with SSL enabled...'
-		SSL=true
-	else
-		echo " > No SSL certificates found in $INSTALLDIR/certificates/"
-		echo ' > Read https://github.com/ruphin/registry-builder for instructions to deploy'
-		echo ' > with your own SSL certificates'
+	read -p 'Generate self-signed certificates instead? [y/N] ' SELFSIGNED
+	if [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
 		echo ''
-		read -p 'Generate self-signed certificates instead? [y/N] ' SELFSIGNED
-		if [[ "$SELFSIGNED" =~ ^[Yy] ]]; then
+		set +e
+		docker run --rm -e COMMON_NAME=$COMMON_NAME -e KEY_NAME=$COMMON_NAME -v $INSTALLDIR/certificates:/certs centurylink/openssl 2> /tmp/openssl_out
+		if [ $? -ne 0 ]; then
+			cat /tmp/openssl_out
 			echo ''
-			set +e
-			docker run --rm -e COMMON_NAME=$COMMON_NAME -e KEY_NAME=registry -v $INSTALLDIR/certificates:/certs centurylink/openssl 2> /tmp/openssl_out
-			if [ $? -ne 0 ]; then
-				cat /tmp/openssl_out
-				echo ''
-				echo ' > Certificate generation failed'
-				echo -e "Exiting.\n"
-			fi
-			set -e
-			echo " > Self-signed certificates generated for $COMMON_NAME"
-			echo " > You will find them in $INSTALLDIR/certificates/"
-			echo ''
-			echo ' > Continuing with SSL enabled...'
-			SSL=true
-		else
-			read -p 'Continue without SSL? [y/N] ' CONTINUE
-			if [[ "$CONTINUE" =~ ^[^Yy] ]]; then
-				echo -e "Exiting.\n"
-				exit 1
-			fi
-			echo ''
-			echo ' > Continuing with SSL DISABLED...'
-			SSL=false
+			echo ' > Certificate generation failed'
+			echo -e "Exiting.\n"
+			exit 1
 		fi
+		set -e
+		echo " > Self-signed certificates generated for $COMMON_NAME"
+		echo " > You will find them in $INSTALLDIR/certificates/"
+		echo ''
+		echo ' > Continuing with SSL enabled...'
+	else
+		echo ' > SSL is required. Install your certificates here:'
+		echo " > $INSTALLDIR/$COMMON_NAME.crt"
+		echo " > $INSTALLDIR/$COMMON_NAME.key"
+		echo ' > Or let the installer generate self-signed certificates.'
+		echo ''
+		echo -e " > Exiting.\n"
+		exit 1
 	fi
 fi
 
@@ -181,56 +157,72 @@ set -e
 docker run -d --name registry-redis \
            redis
 
+# Save the IP address of redis
+REDIS_IP=`docker inspect --format '{{ .NetworkSettings.IPAddress }}' registry-redis`
+
 # Add config file for the registry
 mkdir -p /data/registry
-mv /store/config.yml /data/registry/config.yml
+cp /store/config.yml /data/registry/config.yml
 
-# Start the registry
+# Configure the Redis address
+sed -i "s/<redis_ip>/$REDIS_IP/g" /data/registry/config.yml
+
+# Generate a secret
+SECRET=`openssl rand -hex 16`
+sed -i "s/<secret>/$SECRET/g" /data/registry/config.yml
+
+# Start registry v1
 set +e
-docker stop registry 2> /dev/null
-docker rm registry 2> /dev/null
+docker stop registry-v1 2> /dev/null
+docker rm registry-v1 2> /dev/null
 set -e
-docker run -d --name=registry \
+docker run -d --name=registry-v1 \
            -v $INSTALLDIR/registry/data:/data \
            -v $INSTALLDIR/registry/config.yml:/docker-registry/config/config.yml \
            -e DOCKER_REGISTRY_CONFIG=/docker-registry/config/config.yml \
            -e SETTINGS_FLAVOR=production \
-           --link registry-redis:redis \
            registry
 
 # Save the IP address of the registry
-REGISTRY_IP=`docker inspect --format '{{ .NetworkSettings.IPAddress }}' registry`
+REGISTRY_V1_IP=`docker inspect --format '{{ .NetworkSettings.IPAddress }}' registry-v1`
+
+# Start registry v2
+set +e
+docker stop registry-v2 2> /dev/null
+docker rm registry-v2 2> /dev/null
+set -e
+docker run -d --name=registry-v2 \
+           -v $INSTALLDIR/registry/data:/data \
+           -v $INSTALLDIR/registry/config.yml:/docker-registry/config/config.yml \
+           registry:2.0 /docker-registry/config/config.yml
+
+# Save the IP address of the registry
+REGISTRY_V2_IP=`docker inspect --format '{{ .NetworkSettings.IPAddress }}' registry-v2`
 
 # Add config file for nginx
 mkdir -p /data/nginx
 mv /store/nginx.conf /data/nginx/nginx.conf
 
-# Set the correct port and possibly remove SSL configs
-if [ "$SSL" = true ]; then
-	NGINX_PORT=443
-	sed -i "s/\/FQDN\./\/$COMMON_NAME./g" /data/nginx/nginx.conf
-else
-	NGINX_PORT=80
-	sed -i '/^  ssl/d' /data/nginx/nginx.conf
-fi
-sed -i "s/listen PORT;/listen $NGINX_PORT;/g" /data/nginx/nginx.conf
+# Set the common name for the SSL certificates
+sed -i "s/\/FQDN\./\/$COMMON_NAME./g" /data/nginx/nginx.conf
 
 # Set the correct domain name
 if [ -z $DOMAIN ]; then
-	sed -i "s/server_name DOMAIN/server_name $DOMAIN/g" /data/nginx/nginx.conf
-else
 	sed -i '/server_name DOMAIN/d' /data/nginx/nginx.conf
+else
+	sed -i "s/server_name DOMAIN/server_name $DOMAIN/g" /data/nginx/nginx.conf
 fi
 
-# Set the correct upstream to the registry container
-sed -i "s/REGISTRY-IP:5000/$REGISTRY_IP:5000/g" /data/nginx/nginx.conf
+# Set the correct upstream to the registry containers
+sed -i "s/REGISTRY-V1-IP/$REGISTRY_V1_IP/g" /data/nginx/nginx.conf
+sed -i "s/REGISTRY-V2-IP/$REGISTRY_V2_IP/g" /data/nginx/nginx.conf
 
 # Start the nginx proxy
 set +e
 docker stop registry-nginx 2> /dev/null
 docker rm registry-nginx 2> /dev/null
 set -e
-docker run -d --name registry-nginx -p 5000:$NGINX_PORT  \
+docker run -d --name registry-nginx -p 5000:443  \
            -v $INSTALLDIR/certificates:/etc/nginx/certs \
            -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
            -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/conf.d/default.conf \
@@ -238,11 +230,18 @@ docker run -d --name registry-nginx -p 5000:$NGINX_PORT  \
 
 echo ''
 echo ' > Done'
-echo ' > If your SSL certificates are set up,'
-echo ' > You can now do cool stuff:'
+echo ' > If you generated your own SSL certificates, do not forget to install them'
+echo ' > '
+echo ' > For Ubuntu/Debian:'
+echo " > Copy $INSTALLDIR/certificates/$COMMON_NAME.crt to your client machines"
+echo " > Place the $COMMON_NAME.crt file in /usr/local/share/ca-certificates/"
+echo ' > Run `sudo update-ca-certificates`'
+echo ' > Run `sudo service docker restart`'
+echo ''
+echo ' > You can now use your registry:'
 echo ''
 echo 'docker pull debian'
-echo 'docker login -u <username> -p <password> -e what@ever.com https://$COMMON_NAME:5000'
-echo 'docker tag debian $COMMON_NAME:5000/mydebian'
-echo 'docker push $COMMON_NAME:5000/mydebian'
-echo 'docker pull $COMMON_NAME:5000/mydebian'
+echo "docker login -u <user> -p <pass> -e some@email.com https://$COMMON_NAME:5000"
+echo "docker tag debian $COMMON_NAME:5000/mydebian"
+echo "docker push $COMMON_NAME:5000/mydebian"
+echo "docker pull $COMMON_NAME:5000/mydebian"
