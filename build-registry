@@ -111,27 +111,27 @@ if [ $INTERACTIVE ]; then
 		echo ' > Generating an htpasswd file interactively'
 		echo ''
 		read -p 'Enter a username: ' HTTP_AUTH_USERNAME
-		if [ -z $HTTP_AUTH_USERNAME ] || [[ "$HTTP_AUTH_USERNAME" =~ [^a-zA-Z0-9] ]]; then
+		if [ -z "$HTTP_AUTH_USERNAME" ] || [[ "$HTTP_AUTH_USERNAME" =~ [^a-zA-Z0-9] ]]; then
 			echo 'Username cannot be empty'
 			echo -e "Exiting.\n"
 			exit 1
 		fi
 		read -s -p 'Enter a password: ' HTTP_AUTH_PASSWORD
 		echo ''
-		if [ -z $HTTP_AUTH_PASSWORD ]; then
+		if [ -z "$HTTP_AUTH_PASSWORD" ]; then
 			echo 'Password cannot be empty'
 			echo -e "Exiting.\n"
 			exit 1
 		fi
 		read -s -p 'Repeat the password: ' HTTP_AUTH_PASSWORD_REPEAT
 		echo ''
-		if [ $HTTP_AUTH_PASSWORD != $HTTP_AUTH_PASSWORD_REPEAT ]; then
+		if [ "$HTTP_AUTH_PASSWORD" != "$HTTP_AUTH_PASSWORD_REPEAT" ]; then
 			echo 'The entered passwords do not match.'
 			echo -e "Exiting.\n"
 			exit 1
 		fi
 		mkdir -p /data/auth
-		echo $HTTP_AUTH_USERNAME | docker run --rm -i ruphin/htpasswd $HTTP_AUTH_PASSWORD > /data/auth/registry.htpasswd
+		echo "$HTTP_AUTH_PASSWORD" | docker run --rm -i ruphin/htpasswd "$HTTP_AUTH_USERNAME" > /data/auth/registry.htpasswd
 		echo ''
 		echo ' > Storing the credentials in an htpasswd file:'
 		echo " > $INSTALLDIR/auth/registry.htpasswd"
