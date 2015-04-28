@@ -8,7 +8,7 @@ if [ -t 1 ]; then
 fi
 
 # Check if a domain name is provided
-if [ ! $INTERACTIVE ] && [ -z $DOMAIN ]; then
+if [ "$INTERACTIVE" != true ] && [ -z $DOMAIN ]; then
 	echo 'You must provide a domain name, or run interactively'
 	echo 'Either pass `-it` or `-e DOMAIN=<domain>` to the docker run command'
 	echo 'See https://github.com/ruphin/registry-builder for details'
@@ -48,6 +48,21 @@ if [ -z $DOMAIN ]; then
 fi
 
 COMMON_NAME=$DOMAIN
+
+echo ''
+if [ "$INTERACTIVE" = true ]; then
+	read -p 'Enter a port number for the registry (blank for default): ' PORT
+fi
+
+# Default to 443
+if [ -z $PORT ]; then
+	PORT=443
+elif [[ "$PORT" =~ [^0-9] ]]; then
+	echo ' > Invalid port number'
+	echo ''
+	echo -e "Exiting.\n"
+	exit 1
+fi
 
 echo ''
 if [ -f /data/certificates/$COMMON_NAME.key.gpg ] && [ -f /data/certificates/$COMMON_NAME.crt.gpg ]; then
@@ -97,7 +112,7 @@ fi
 
 echo ''
 echo ' > Setting up authentication...'
-if [ $INTERACTIVE ]; then
+if [ "$INTERACTIVE" = true ]; then
 	if [ -f /data/auth/registry.htpasswd ]; then
 		echo " > Found $INSTALLDIR/auth/registry.htpasswd"
 		read -p 'Use this for authorization? [Y/n] ' USE_EXISTING_HTPASSWD
@@ -222,11 +237,18 @@ set +e
 docker stop registry-nginx 2> /dev/null
 docker rm registry-nginx 2> /dev/null
 set -e
-docker run -d --name registry-nginx -p 5000:443  \
+docker run -d --name registry-nginx -p $PORT:443  \
            -v $INSTALLDIR/certificates:/etc/nginx/certs \
            -v $INSTALLDIR/auth:/etc/nginx/htpasswd \
            -v $INSTALLDIR/nginx/nginx.conf:/etc/nginx/conf.d/default.conf \
            nginx
+
+
+if [ "$PORT" != 443 ]; then
+	$PORT_SPEC=":$PORT"
+else
+	$PORT_SPEC=""
+fi
 
 echo ''
 echo ' > Done'
@@ -241,7 +263,7 @@ echo ''
 echo ' > You can now use your registry:'
 echo ''
 echo 'docker pull debian'
-echo "docker login -u <user> -p <pass> -e some@email.com https://$COMMON_NAME:5000"
-echo "docker tag debian $COMMON_NAME:5000/mydebian"
-echo "docker push $COMMON_NAME:5000/mydebian"
-echo "docker pull $COMMON_NAME:5000/mydebian"
+echo "docker login -u <user> -p <pass> -e some@email.com https://$COMMON_NAME$PORT_SPEC"
+echo "docker tag debian $COMMON_NAME$PORT_SPEC/mydebian"
+echo "docker push $COMMON_NAME$PORT_SPEC/mydebian"
+echo "docker pull $COMMON_NAME$PORT_SPEC/mydebian"
