@@ -245,9 +245,9 @@ docker run -d --name registry-nginx -p $PORT:443  \
 
 
 if [ "$PORT" != 443 ]; then
-	$PORT_SPEC=":$PORT"
+	PORT_SPEC=":$PORT"
 else
-	$PORT_SPEC=""
+	PORT_SPEC=""
 fi
 
 echo ''
