@@ -38,10 +38,10 @@ Now you can use your private registry:
 
 ```bash
 docker pull debian
-docker login -u <username> -p <password> -e what@ever.com https://<registry>:5000
-docker tag debian <registry>:5000/mydebian
-docker push <registry>:5000/mydebian
-docker pull <registry>:5000/mydebian
+docker login -u <username> -p <password> -e some@email.com https://<registry>
+docker tag debian <registry>/mydebian
+docker push <registry>/mydebian
+docker pull <registry>/mydebian
 ```
 
 
@@ -96,6 +96,7 @@ With these in place, you can run the following:
 docker run -v /var/run/docker.sock:/var/run/docker.sock \
            -e INSTALLDIR=<installpath> -v <installpath>:/data \
            -e DOMAIN=<domain> \
+           -e PORT=<port> \ # Optional
            --rm ruphin/registry-installer
 ```
 
